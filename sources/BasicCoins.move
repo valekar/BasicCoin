@@ -4,6 +4,8 @@ address 0xCAED {
         use std::signer;
         use std::errors;
 
+
+
         const MODULE_OWNER :address  = @0xCAED;
         const ENOT_MODULE_OWNER:u64 = 0;
         const EALREADY_INITIALIZED : u64 = 2;
@@ -67,16 +69,56 @@ address 0xCAED {
             mint(&account, @0x1, 10);
         }
 
-        // #[test(account = @0x1)]
-        // fun publish_balance_has_zero(account :signer) acquires Balance {
-        //     let addr = signer::address_of(&account);
+        #[test(account = @0xCAED)]
+        fun mint_check_balance(account :signer) acquires Balance {
+            let addr = signer::address_of(&account);
 
-        //     publish_balance(&account);
+            publish_balance(&account);
 
-        //     mint(&account , @0xCAED, 42);
-        //     assert!(balance_of(addr) == 0 , 0);
-        // }
+            mint(&account , @0xCAED, 42);
+            assert!(balance_of(addr) == 42 , 0);
+        }
 
+        #[test(account = @0x1)]
+        fun publish_balance_has_zero(account : signer) acquires Balance {
+            let addr = signer::address_of(&account);
+            publish_balance(&account);
+            assert!(balance_of(addr) == 0 , 0);
+        }
+
+        #[test(account = @0x1)]
+        #[expected_failure(abort_code = 518)]
+        fun publish_balance_already_exists(account : signer) {
+            publish_balance(&account);
+            publish_balance(&account);
+        }
+
+        #[test(account = @0x1)]
+        #[expected_failure]
+        fun withdraw_dne() acquires Balance {
+            let Coin { value } = withdraw(@0x1, 1);
+            let _ = value;
+        }
+
+        #[test(account = @0x1)]
+        #[expected_failure]
+        fun withdraw_too_much(account : signer) acquires Balance {
+            let addr = signer::address_of(&account);
+            publish_balance(&account);
+            Coin {value : _} = withdraw(addr, 1);
+        }
+
+        #[test(account = @0xCAED)]
+        fun can_withdraw_amount(account : signer) acquires Balance {
+            publish_balance(&account);
+            let addr = signer::address_of(&account);
+            mint(&account, addr, 1000);
+
+            let Coin { value } = withdraw(addr, 50);
+
+            assert!(balance_of(addr) == 950, 1);
+            assert!(value == 50, 0);
+        }
 
     }
 }
