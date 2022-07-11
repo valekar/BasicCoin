@@ -3,6 +3,7 @@ address 0xCAED {
 
         use std::signer;
         use std::errors;
+       // use std::debug;
 
 
 
@@ -12,113 +13,121 @@ address 0xCAED {
         const ENOT_ENOUGH_BALANCE : u64 = 1;
 
         //use std::signer;
-        struct Coin has store {
+        struct Coin<phantom CoinT> has store {
             value : u64
         }
 
-        struct Balance has key {
-            coin : Coin
+        struct Balance<phantom CoinT> has key {
+            coin : Coin<CoinT>
         }
 
-        public fun mint(module_owner: &signer, mint_addr : address, amount : u64) acquires Balance {
+        public fun mint<CoinT>(module_owner: &signer, mint_addr : address, amount : u64) acquires Balance {
             assert!(signer::address_of(module_owner) == MODULE_OWNER, errors::requires_address(ENOT_MODULE_OWNER));
             //move_to(mint_addr, Balance { coin : Coin {value : amount}})
-            depsoit(mint_addr, Coin {value : amount});
+            depsoit<CoinT>(mint_addr, Coin<CoinT> {value : amount});
         
         }
        
-        public fun publish_balance(account : &signer) {
+        public fun publish_balance<CoinT>(account : &signer) {
 
-            assert!(!exists<Balance>(signer::address_of(account)), errors::already_published(EALREADY_INITIALIZED));
-            move_to(account , Balance { coin : Coin {value : 0}})
+            assert!(!exists<Balance<CoinT>>(signer::address_of(account)), errors::already_published(EALREADY_INITIALIZED));
+            let empty_coin = Coin<CoinT>{value : 0};
+            move_to(account , Balance<CoinT>{ coin : empty_coin})
         }
 
-        public fun balance_of(owner : address):u64 acquires Balance {
-            borrow_global<Balance>(owner).coin.value
+        public fun balance_of<CoinT>(owner : address):u64 acquires Balance {
+            borrow_global<Balance<CoinT>>(owner).coin.value
         }
 
-        public fun depsoit(addr : address, coin : Coin) acquires Balance {
-            let balance = balance_of(addr);
-
-            let balance_ref = &mut  borrow_global_mut<Balance>(addr).coin.value;
-            
-            let Coin {value } = coin;
-
+        public fun depsoit<CoinT>(addr : address, check : Coin<CoinT>) acquires Balance {
+            let balance = balance_of<CoinT>(addr);
+            let balance_ref = &mut borrow_global_mut<Balance<CoinT>>(addr).coin.value;
+            let Coin { value } = check;
             *balance_ref = balance + value;
 
         }
 
-        public fun withdraw(addr : address, amount : u64) : Coin acquires Balance {
-            let balance = balance_of(addr);
+        public fun withdraw<CoinT>(addr : address, amount : u64) : Coin<CoinT> acquires Balance {
+            let balance = balance_of<CoinT>(addr);
 
             assert!(balance >= amount, ENOT_ENOUGH_BALANCE);
-            let balance_ref = &mut borrow_global_mut<Balance>(addr).coin.value;
+            let balance_ref = &mut borrow_global_mut<Balance<CoinT>>(addr).coin.value;
 
             *balance_ref = balance - amount;
 
-            Coin {value : amount}
+            Coin<CoinT>{value : amount}
 
         }
 
         #[test(account = @0x1)]
         #[expected_failure]
-        fun mint_non_owner(account : signer) acquires Balance {
-            publish_balance(&account);
+        fun mint_non_owner<CoinT>(account : signer) acquires Balance {
+            publish_balance<CoinT>(&account);
 
             assert!(signer::address_of(&account) != MODULE_OWNER, 0);
-            mint(&account, @0x1, 10);
+            mint<CoinT>(&account, @0x1, 10);
         }
 
         #[test(account = @0xCAED)]
-        fun mint_check_balance(account :signer) acquires Balance {
+        fun mint_check_balance<CoinT>(account :signer) acquires Balance {
             let addr = signer::address_of(&account);
 
-            publish_balance(&account);
+            publish_balance<CoinT>(&account);
 
-            mint(&account , @0xCAED, 42);
-            assert!(balance_of(addr) == 42 , 0);
+            mint<CoinT>(&account , @0xCAED, 42);
+            assert!(balance_of<CoinT>(addr) == 42 , 0);
         }
 
         #[test(account = @0x1)]
-        fun publish_balance_has_zero(account : signer) acquires Balance {
+        fun publish_balance_has_zero<CoinT>(account : signer) acquires Balance {
             let addr = signer::address_of(&account);
-            publish_balance(&account);
-            assert!(balance_of(addr) == 0 , 0);
+            publish_balance<CoinT>(&account);
+            assert!(balance_of<CoinT>(addr) == 0 , 0);
         }
 
         #[test(account = @0x1)]
         #[expected_failure(abort_code = 518)]
-        fun publish_balance_already_exists(account : signer) {
-            publish_balance(&account);
-            publish_balance(&account);
+        fun publish_balance_already_exists<CoinT>(account : signer) {
+            publish_balance<CoinT>(&account);
+            publish_balance<CoinT>(&account);
         }
 
         #[test(account = @0x1)]
         #[expected_failure]
-        fun withdraw_dne() acquires Balance {
-            let Coin { value } = withdraw(@0x1, 1);
+        fun withdraw_dne<CoinT>() acquires Balance {
+            let Coin { value } = withdraw<CoinT>(@0x1, 1);
             let _ = value;
         }
 
         #[test(account = @0x1)]
         #[expected_failure]
-        fun withdraw_too_much(account : signer) acquires Balance {
+        fun withdraw_too_much<CoinT>(account : signer) acquires Balance {
             let addr = signer::address_of(&account);
-            publish_balance(&account);
-            Coin {value : _} = withdraw(addr, 1);
+            publish_balance<CoinT>(&account);
+            Coin {value : _} = withdraw<CoinT>(addr, 1);
         }
 
         #[test(account = @0xCAED)]
-        fun can_withdraw_amount(account : signer) acquires Balance {
-            publish_balance(&account);
+        fun can_withdraw_amount<CoinT>(account : signer) acquires Balance {
+            publish_balance<CoinT>(&account);
             let addr = signer::address_of(&account);
-            mint(&account, addr, 1000);
+            mint<CoinT>(&account, addr, 1000);
 
-            let Coin { value } = withdraw(addr, 50);
+            let Coin<CoinT>{ value } = withdraw<CoinT>(addr, 50);
+            //debug::print(&value);
 
-            assert!(balance_of(addr) == 950, 1);
+            assert!(balance_of<CoinT>(addr) == 950, 1);
             assert!(value == 50, 0);
         }
+
+
+        #[test(account = @0x1)]
+        #[expected_failure]
+        fun balance_dne<CoinT>(account : signer) acquires Balance {
+            let addr = signer::address_of(&account);
+            balance_of<CoinT>(addr);
+        }
+
 
     }
 }
