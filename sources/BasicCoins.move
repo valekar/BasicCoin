@@ -129,5 +129,33 @@ address 0xCAED {
         }
 
 
+
+        spec balance_of {
+            pragma aborts_if_is_strict;
+            aborts_if !exists<Balance<CoinT>>(owner);
+        }
+
+        spec withdraw {
+            let balance = borrow_global<Balance<CoinT>>(addr).coin.value;
+            aborts_if !exists<Balance<CoinT>>(addr);
+            aborts_if balance < amount;
+
+            let post balance_post = borrow_global<Balance<CoinT>>(addr).coin.value;
+            ensures balance_post == balance - amount;
+            ensures result == Coin<CoinT>{value : amount};
+        }
+
+        spec depsoit {
+            let balance = global<Balance<CoinT>>(addr).coin.value;
+            let check_value = check.value;
+
+            aborts_if !exists<Balance<CoinT>>(addr);
+            aborts_if balance + check_value > MAX_U64;
+
+            let post balance_post = global<Balance<CoinT>>(addr).coin.value;
+            ensures balance_post == balance + check_value;
+        }
+
+
     }
 }
